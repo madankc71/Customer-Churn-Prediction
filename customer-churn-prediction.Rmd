@@ -1,0 +1,203 @@
+---
+title: "Customer Churn"
+author: "Madan K C"
+date: "2023-04-27"
+output:
+  pdf_document: default
+  html_document: default
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+# Customer Churn Prediction
+In this project, we will be analyzing a telecom churn dataset. The objective of the analysis is to develop a model to predict whether a customer will churn or not. The dataset consists of 7043 observations and 23 variables. The dataset contains a mix of categorical and continuous variables.
+I have copied the dataset from kaggle:https://www.kaggle.com/datasets/datazng/telecom-company-churn-rate-call-center-data/discussion/392565
+
+
+Load data
+```{r}
+library(readxl)
+telecom_data <- read_excel("data/telecom-churn-rate-dataset.xlsx")
+#View(telecom_churn_rate_dataset)
+```
+
+```{r}
+dim(telecom_data)
+```
+
+```{r}
+names(telecom_data)
+```
+
+
+```{r}
+str(telecom_data)
+```
+
+Find the number of unique values in each variable.
+```{r}
+library(dplyr)
+sapply(telecom_data, n_distinct)
+```
+
+
+There are not any missing values in the dataset.
+```{r}
+colSums(is.na(telecom_data))
+```
+
+
+Remove the observations having missing values.
+```{r}
+telecom_data <- na.omit(telecom_data)
+```
+
+
+```{r}
+dim(telecom_data)
+```
+
+Now the rows having missing values have been removed. 
+Checking if there are any mising values again.
+```{r}
+colSums(is.na(telecom_data))
+```
+
+
+Converting the categorical variables to factor.
+```{r}
+telecom_data[, sapply(telecom_data, is.character)] <- lapply(telecom_data[, sapply(telecom_data, is.character)], factor)
+
+```
+
+Check whether the categorical are now factor or not.
+```{r}
+str(telecom_data)
+```
+
+
+```{r}
+library(magrittr)
+library(dplyr)
+customer_status <- telecom_data %>% group_by(gender) %>% summarise(num_customers = n())
+customer_status
+```
+
+As Customer ID is not related to the regression, using variables except customerID variable.
+Removing this from the dataframe
+```{r}
+telecom_data <- select(telecom_data, -customerID)
+```
+
+
+Logistic regression with all other variables considered.
+```{r}
+logistic_reg1 <- glm(Churn ~ ., family = binomial, data = telecom_data)
+summary(logistic_reg1)
+```
+
+
+Considering only the variables having significant
+
+modeling_data = telecom_data %>% dplyr::select(-customerID)
+
+
+```{r}
+logistic_reg <- glm(Churn ~ SeniorCitizen + tenure + MultipleLines + Contract + PaperlessBilling + TotalCharges + numTechTickets, family = binomial, data = telecom_data)
+summary(logistic_reg)
+```
+
+
+## Data Partition and Modelling
+```{r}
+library(caret)
+data_partition <- telecom_data
+#telecom_data$Churn = as.factor(telecom_data$Churn)
+data_partition$leave = ifelse(data_partition$Churn == "Yes","Churn","Not")
+data_partition$leave = as.factor(data_partition$leave)
+data_partition = data_partition %>% dplyr::select(-Churn) #removing the column with numbers, otherwise the prediction is obvious
+
+set.seed(1)
+test.indices = createDataPartition(data_partition$leave, p = 0.2, list = FALSE) #classic 80/20 train-test partition
+test_partition = data_partition[test.indices,]
+train_partition = data_partition[-test.indices,]
+```
+
+
+
+```{r}
+model_train = train(leave ~ SeniorCitizen + tenure + MultipleLines + Contract + PaperlessBilling + TotalCharges + numTechTickets, data = train_partition, method = "glm", family = binomial(link = "logit"))
+
+predTrain = predict(model_train, train_partition)
+predTest = predict(model_train, test_partition)
+```
+
+For Training data, the Confusion Matrix:
+```{r}
+confusionMatrix(predTrain, train_partition$leave, positive = "Churn")
+```
+For Testing data, the Confusion Matrix:
+```{r}
+confusionMatrix(predTest, test_partition$leave, positive = "Churn")
+
+```
+
+## Cross-validation
+
+```{r}
+train_control <- trainControl(method="cv", number=15) #10-fold cross validation
+model_cv <- caret::train(leave ~ SeniorCitizen + tenure + MultipleLines + Contract + PaperlessBilling + TotalCharges + numTechTickets, data=train_partition, trControl=train_control, method = "glm", family = binomial(link = "logit"))
+print(model_cv)
+```
+
+```{r}
+predTest.cv <- predict(model_cv, test_partition)
+cmTest.cv = confusionMatrix(predTest.cv, test_partition$leave)
+cmTest.cv
+```
+
+```{r}
+importance <- varImp(model_train, scale=FALSE)
+plot(importance)
+```
+
+## Decision Tree
+
+```{r}
+library(party)
+tree <- ctree(leave~., data = train_partition)
+```
+
+```{r}
+treePredTrain <- predict(tree, train_partition, type = "response")
+
+confusionMatrix(treePredTrain,train_partition$leave)
+```
+
+```{r}
+treePredTest <- predict(tree, test_partition, type = "response")
+
+confusionMatrix(treePredTest,test_partition$leave)
+```
+
+
+Cross Validation: Decision Tree
+
+```{r}
+train_control_tree <- trainControl(method="cv", number=10)
+model_tree <- caret::train(leave~., data=train_partition, trControl=train_control_tree, method="ctree")
+
+print(model_tree)
+```
+
+```{r}
+predTest_tree <- predict(model_tree, test_partition)
+tree_cv = confusionMatrix(predTest_tree, test_partition$leave)
+tree_cv
+
+```
+
+
+
+
