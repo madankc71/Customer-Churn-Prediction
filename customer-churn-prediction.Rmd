@@ -1,5 +1,5 @@
 ---
-title: "Customer Churn"
+title: "Customer Churn Prediction"
 author: "Madan K C"
 date: "2023-04-27"
 output:
@@ -11,42 +11,44 @@ output:
 knitr::opts_chunk$set(echo = TRUE)
 ```
 # Customer Churn Prediction
-In this project, we will be analyzing a telecom churn dataset. The objective of the analysis is to develop a model to predict whether a customer will churn or not. The dataset consists of 7043 observations and 23 variables. The dataset contains a mix of categorical and continuous variables.
-I have copied the dataset from kaggle:https://www.kaggle.com/datasets/datazng/telecom-company-churn-rate-call-center-data/discussion/392565
+
+In this project, we will be analyzing a telecom churn dataset. The objective of the analysis is to develop a model to predict whether a customer will churn or not. The dataset consists of 7043 observations and 23 variables. The dataset contains a mix of categorical and continuous variables. I have taken the dataset from kaggle: https://github.com/madankc71/Customer-Churn-Prediction
+
+I have determined generalized linear model with logistic regression and decision tree by implementing data partition and cross validation.
 
 
-Load data
+Loading the required package and reading the dataset
 ```{r}
 library(readxl)
 telecom_data <- read_excel("data/telecom-churn-rate-dataset.xlsx")
 #View(telecom_churn_rate_dataset)
 ```
 
+
+Check the dimension of the dataset.
+Get the names of variables in the dataset
 ```{r}
 dim(telecom_data)
-```
-
-```{r}
 names(telecom_data)
 ```
 
-
+Get the structure of the dataset.
 ```{r}
 str(telecom_data)
 ```
+There are 17 categorical (character) variables and 6 numeric variables in the dataset.
 
-Find the number of unique values in each variable.
+Find the number of unique values in each variable:
 ```{r}
 library(dplyr)
 sapply(telecom_data, n_distinct)
 ```
 
-
-There are not any missing values in the dataset.
+Check for missing values in the dataset:
 ```{r}
 colSums(is.na(telecom_data))
 ```
-
+The 'TotalCharges' variable shas 11 missing values
 
 Remove the observations having missing values.
 ```{r}
@@ -54,67 +56,66 @@ telecom_data <- na.omit(telecom_data)
 ```
 
 
-```{r}
-dim(telecom_data)
-```
-
-Now the rows having missing values have been removed. 
 Checking if there are any mising values again.
 ```{r}
 colSums(is.na(telecom_data))
 ```
 
+From this, we found that there are not any missing values.
 
-Converting the categorical variables to factor.
+For the logistic regression, it is appropriate to convert categorical variables to factor. 
+Therefore, converting the categorical variables to factor.
 ```{r}
 telecom_data[, sapply(telecom_data, is.character)] <- lapply(telecom_data[, sapply(telecom_data, is.character)], factor)
 
 ```
 
-Check whether the categorical are now factor or not.
+Checking whether the categorical variables are converted to factor or not:
 ```{r}
 str(telecom_data)
 ```
 
-
+Grouping customers by gender and finding the number of customers for each gender:
 ```{r}
 library(magrittr)
 library(dplyr)
 customer_status <- telecom_data %>% group_by(gender) %>% summarise(num_customers = n())
 customer_status
 ```
+From the table, we found that there are 3483 female customers and 3549 male customers.
 
-As Customer ID is not related to the regression, using variables except customerID variable.
-Removing this from the dataframe
+As 'Customer ID' variable is not related to the regression, so using variables except customerID variable.
+Removing customerID variable from the dataset:
 ```{r}
 telecom_data <- select(telecom_data, -customerID)
 ```
 
-
-Logistic regression with all other variables considered.
+## Logistic Regression:
+Performing logistic regression with all the variables:
 ```{r}
 logistic_reg1 <- glm(Churn ~ ., family = binomial, data = telecom_data)
 summary(logistic_reg1)
 ```
+There are several values with multicollinearity and insignificantly large p-values.
 
 
-Considering only the variables having significant
-
-modeling_data = telecom_data %>% dplyr::select(-customerID)
-
-
+Considering only the variables having significant p-value.
+Performing logistic regression with significant variables only:
 ```{r}
 logistic_reg <- glm(Churn ~ SeniorCitizen + tenure + MultipleLines + Contract + PaperlessBilling + TotalCharges + numTechTickets, family = binomial, data = telecom_data)
 summary(logistic_reg)
 ```
 
+Thus, by determining appropriate generalized linear models, I have met the second objective (Determine and apply the appropriate generalized linear model for a specific data context).
 
+# Objective 3: Conduct model selection for a set of candidate models
 ## Data Partition and Modelling
+In this chunk of code, the necessary packages are loaded, and the telecom data is partitioned into a training and testing set. The leave column is created as a factor with two levels, "Churn" and "Not Churn" and the "Churn" column is removed. The glm function from caret is used to fit a logistic regression model to the training set. The model's performance is then evaluated using confusion matrices for both the training and testing sets.
 ```{r}
 library(caret)
 data_partition <- telecom_data
 #telecom_data$Churn = as.factor(telecom_data$Churn)
-data_partition$leave = ifelse(data_partition$Churn == "Yes","Churn","Not")
+data_partition$leave = ifelse(data_partition$Churn == "Yes","Churn","Not Churn")
 data_partition$leave = as.factor(data_partition$leave)
 data_partition = data_partition %>% dplyr::select(-Churn) #removing the column with numbers, otherwise the prediction is obvious
 
@@ -125,7 +126,7 @@ train_partition = data_partition[-test.indices,]
 ```
 
 
-
+The code fits a generalized linear model (GLM) using the train function from the caret package to predict customer churn based on seven predictor variables. The trained model is then used to generate churn predictions for both the training and test partitions.
 ```{r}
 model_train = train(leave ~ SeniorCitizen + tenure + MultipleLines + Contract + PaperlessBilling + TotalCharges + numTechTickets, data = train_partition, method = "glm", family = binomial(link = "logit"))
 
@@ -137,32 +138,42 @@ For Training data, the Confusion Matrix:
 ```{r}
 confusionMatrix(predTrain, train_partition$leave, positive = "Churn")
 ```
+
+We got 84.62% accuracy here.
+
 For Testing data, the Confusion Matrix:
 ```{r}
 confusionMatrix(predTest, test_partition$leave, positive = "Churn")
 
 ```
+For the testing data, the accuracy is little more than for the training data (84.86%) which is a good prediction.
 
 ## Cross-validation
+In this chunk of code, a 15-fold cross-validation technique is applied to the logistic regression model previously built. The performance of the model is then printed. The model's performance is also evaluated using a confusion matrix on the testing set.
 
 ```{r}
-train_control <- trainControl(method="cv", number=15) #10-fold cross validation
+train_control <- trainControl(method="cv", number=15) #15-fold cross validation
 model_cv <- caret::train(leave ~ SeniorCitizen + tenure + MultipleLines + Contract + PaperlessBilling + TotalCharges + numTechTickets, data=train_partition, trControl=train_control, method = "glm", family = binomial(link = "logit"))
 print(model_cv)
 ```
+We got the accuracy of 84.45% which is less than that of data partition we did before.
 
+Now, finding the accuracy for the test data:
 ```{r}
 predTest.cv <- predict(model_cv, test_partition)
 cmTest.cv = confusionMatrix(predTest.cv, test_partition$leave)
 cmTest.cv
 ```
+The accuracy is 84.86% which is equal to that of normal data partition.
 
+Now finding the important variables for the model:
 ```{r}
 importance <- varImp(model_train, scale=FALSE)
 plot(importance)
 ```
 
 ## Decision Tree
+In this chunk of code, the party package is loaded, and a decision tree is built using the ctree function. The model's performance is evaluated using confusion matrices for both the training and testing sets.
 
 ```{r}
 library(party)
@@ -174,22 +185,28 @@ treePredTrain <- predict(tree, train_partition, type = "response")
 
 confusionMatrix(treePredTrain,train_partition$leave)
 ```
+We got the 86.6% accuracy using decision tree which is greater than others above.
 
+Finding accuracy on the test data:
 ```{r}
 treePredTest <- predict(tree, test_partition, type = "response")
 
 confusionMatrix(treePredTest,test_partition$leave)
 ```
+The accuracy we got is the largest till now: 84.72%.
 
+## Cross Validation: Decision Tree
+In this chunk of code, a 10-fold cross-validation technique is applied to the decision tree model previously built. The performance of the model is then printed. The model's performance is also evaluated using a confusion matrix on the testing set.
 
-Cross Validation: Decision Tree
-
+Overall, the code performs data partitioning, logistic regression, cross-validation, and decision tree modeling on the telecom data set and evaluates the model's performance on the training and testing sets.
 ```{r}
-train_control_tree <- trainControl(method="cv", number=10)
+train_control_tree <- trainControl(method="cv", number=15)
 model_tree <- caret::train(leave~., data=train_partition, trControl=train_control_tree, method="ctree")
 
 print(model_tree)
 ```
+
+The final model had a mincriterion value of 0.99 and an accuracy of 0.8488913.
 
 ```{r}
 predTest_tree <- predict(model_tree, test_partition)
@@ -198,6 +215,10 @@ tree_cv
 
 ```
 
+However, the prediction on the test data decreases to 84.15%.
 
+
+Therefore, we are selecting decision tree with data partition into 80/20 (train/test) among logistic regression with data partition and cross validation and decision tree with data partition and cross validation.
+The selected model has 86.6% accuracy in train and 86.72% accuracy in the test data.
 
 
